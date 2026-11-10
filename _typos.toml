@@ -1,0 +1,17 @@
+# words the spell checker would "fix". they're right here. i'm screwed.
+[default.extend-words]
+# vim's :enew command
+enew = "enew"
+# vim 'comments' flags, matched as [sme]. even my comments need supervision.
+sme = "sme"
+# notepad++'s own config.xml attribute is fifrecuisive (sic). i inherit the
+# crap.
+Recuisive = "Recuisive"
+# menu labels: & underlines a letter (sav&e all, clos&e all). i can't save
+# myself.
+Sav = "Sav"
+Clos = "Clos"
+# a test selects the first three letters of "hello". hell was close.
+hel = "hel"
+# the spell check test needs a misspelled word
+sentense = "sentense"

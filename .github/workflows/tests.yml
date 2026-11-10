@@ -1,0 +1,108 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # nightly neovim keeps changing, so tests also run every monday morning. i
+    # want the robot to tell me at 4:17 utc, before a stranger files "broken"
+    # and i spend what's left of my life finding out they're absolutely right.
+    - cron: '17 4 * * 1'
+
+# the tests only read code. the token gets read access and nothing else.
+# basically i've trusted enough shit already.
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            neovim: v0.11.0
+            archive: nvim-linux-x86_64
+          - os: ubuntu-latest
+            neovim: stable
+            archive: nvim-linux-x86_64
+          - os: ubuntu-latest
+            neovim: nightly
+            archive: nvim-linux-x86_64
+          - os: macos-latest
+            neovim: stable
+            archive: nvim-macos-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      # pinned to the commit behind v5, so moved tags can't change what runs.
+      # i can fuck it up myself.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install ripgrep (find in files)
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install ripgrep
+          else
+            sudo apt-get install -y ripgrep
+          fi
+      - name: Install Neovim ${{ matrix.neovim }}
+        env:
+          NEOVIM_VERSION: ${{ matrix.neovim }}
+          NEOVIM_ARCHIVE: ${{ matrix.archive }}
+        run: |
+          releases="https://github.com/neovim/neovim/releases/download"
+          curl -fsSL -o nvim.tar.gz "$releases/$NEOVIM_VERSION/$NEOVIM_ARCHIVE.tar.gz"
+          tar -xzf nvim.tar.gz
+          echo "$PWD/$NEOVIM_ARCHIVE/bin" >> "$GITHUB_PATH"
+      - run: nvim --version
+      - name: Run the tests
+        run: nvim -l tests/run.lua
+
+  # every static check from tools/lint.sh, each tool pinned to the version the
+  # code was last checked with. i want my failures to outlive me.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install the checkers
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/tools"
+          mkdir -p "$tools/bin"
+          cd "$tools"
+          get() { curl -fsSL -o "$2" "https://github.com/$1"; }
+          get neovim/neovim/releases/download/stable/nvim-linux-x86_64.tar.gz nvim.tar.gz
+          tar -xzf nvim.tar.gz
+          get Kampfkarren/selene/releases/download/0.32.0/selene-0.32.0-linux.zip selene.zip
+          get JohnnyMorganz/StyLua/releases/download/v2.6.0/stylua-linux-x86_64.zip stylua.zip
+          unzip -q selene.zip -d bin
+          unzip -q stylua.zip -d bin
+          shellcheck_asset=shellcheck-v0.11.0.linux.x86_64.tar.xz
+          get "koalaman/shellcheck/releases/download/v0.11.0/$shellcheck_asset" shellcheck.tar.xz
+          tar -xJf shellcheck.tar.xz
+          cp shellcheck-v0.11.0/shellcheck bin/
+          typos_asset=typos-v1.52.2-x86_64-unknown-linux-musl.tar.gz
+          get "crate-ci/typos/releases/download/v1.52.2/$typos_asset" typos.tar.gz
+          tar -xzf typos.tar.gz -C bin ./typos
+          get mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64 bin/shfmt
+          get rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz actionlint.tar.gz
+          tar -xzf actionlint.tar.gz -C bin actionlint
+          mkdir -p luals
+          luals_asset=lua-language-server-3.19.2-linux-x64.tar.gz
+          get "LuaLS/lua-language-server/releases/download/3.19.2/$luals_asset" luals.tar.gz
+          tar -xzf luals.tar.gz -C luals
+          chmod +x bin/*
+          pip install --quiet ruff==0.12.3 mypy==2.4.1 yamllint==1.38.0 codespell==2.4.3
+          npm install --global --silent markdownlint-cli2@0.22.1
+          {
+            echo "$tools/bin"
+            echo "$tools/luals/bin"
+            echo "$tools/nvim-linux-x86_64/bin"
+          } >> "$GITHUB_PATH"
+      - name: Run every check
+        run: tools/lint.sh

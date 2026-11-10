@@ -1,0 +1,8 @@
+{
+  "config": {
+    // prose wraps at 80; tables, code blocks and html keep their lines whole
+    "MD013": { "line_length": 80, "tables": false, "code_blocks": false },
+    // picture elements give the charts a dark version for github's dark theme
+    "MD033": { "allowed_elements": ["picture", "source", "img"] }
+  }
+}

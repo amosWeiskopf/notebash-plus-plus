@@ -1,0 +1,3 @@
+[codespell]
+skip = *.png,*.exe,./.git,./_typos.toml
+ignore-words-list = enew,sme,sentense

@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notebash++: Neovim that types and edits like Notepad++</title>
+<meta name="description" content="Neovim with Notepad++'s keys, menus and Find dialog, for Linux, macOS, WSL and servers over SSH. A 5 GB CSV opens as a spreadsheet in 0.72 s.">
+<link rel="canonical" href="https://amosweiskopf.github.io/notebash-plus-plus/">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2350b85a'/%3E%3Crect x='8' y='10' width='16' height='3.5' rx='1' fill='%23fff'/%3E%3Crect x='8' y='18.5' width='16' height='3.5' rx='1' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="site.css">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Notebash++">
+<meta property="og:title" content="Notebash++: Neovim that types and edits like Notepad++">
+<meta property="og:description" content="Notepad++'s keyboard and menus without modes, in any terminal on Linux, macOS or WSL, and on servers over SSH. A 5 GB CSV opens as a spreadsheet in 0.72 s.">
+<meta property="og:image" content="https://amosweiskopf.github.io/notebash-plus-plus/og-notebash-1.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="1200">
+<meta property="og:image:alt" content="Notebash++ with a Python file open, showing the Notepad++ menu bar and line numbers">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Notebash++: Neovim that types and edits like Notepad++">
+<meta name="twitter:description" content="Notepad++'s keyboard and menus without modes, in any terminal on Linux, macOS or WSL, and on servers over SSH.">
+<meta name="twitter:image" content="https://amosweiskopf.github.io/notebash-plus-plus/og-notebash-1.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://amosweiskopf.github.io/notebash-plus-plus/#app",
+      "name": "Notebash++",
+      "description": "A Neovim configuration that types and edits like Notepad++ 8.5.3: no modes, Notepad++ keys and menus, the Find dialog with Notepad++ regular expressions, column mode, macros, session restore, and CSV files as a spreadsheet at any size.",
+      "url": "https://amosweiskopf.github.io/notebash-plus-plus/",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "softwareVersion": "1.0.0",
+      "softwareRequirements": "Neovim 0.11 or newer",
+      "license": "https://opensource.org/licenses/MIT",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "Amos Weiskopf"
+      },
+      "screenshot": [
+        "https://amosweiskopf.github.io/notebash-plus-plus/hero.png",
+        "https://amosweiskopf.github.io/notebash-plus-plus/spreadsheet.png",
+        "https://amosweiskopf.github.io/notebash-plus-plus/large-file.png",
+        "https://amosweiskopf.github.io/notebash-plus-plus/carets.png",
+        "https://amosweiskopf.github.io/notebash-plus-plus/menus.png"
+      ],
+      "sameAs": "https://github.com/amosWeiskopf/notebash-plus-plus"
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "Notebash++ source code",
+      "codeRepository": "https://github.com/amosWeiskopf/notebash-plus-plus",
+      "programmingLanguage": "Lua",
+      "license": "https://opensource.org/licenses/MIT",
+      "version": "1.0.0",
+      "targetProduct": { "@id": "https://amosweiskopf.github.io/notebash-plus-plus/#app" }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wide">
+    <a class="wordmark" href="./">Notebash++</a>
+    <nav aria-label="Site">
+      <a href="#install">Install</a>
+      <a href="https://github.com/amosWeiskopf/notebash-plus-plus/blob/main/KEYS.md">Keys</a>
+      <a href="https://github.com/amosWeiskopf/notebash-plus-plus">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<div class="intro text">
+  <h1>Neovim that types and edits like Notepad++.</h1>
+  <p class="subhead">Notepad++'s keyboard and menus without modes, in any terminal on Linux, macOS or WSL, and on servers over SSH.</p>
+
+  <div class="actions">
+    <a class="button primary" href="https://github.com/amosWeiskopf/notebash-plus-plus">
+      <svg aria-hidden="true" viewBox="0 0 16 16" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      Source on GitHub
+    </a>
+    <a class="button" href="#video">Watch the 2-minute video</a>
+  </div>
+
+  <div class="command">
+    <pre><code>git clone https://github.com/amosWeiskopf/notebash-plus-plus.git ~/.local/src/notebash-plus-plus
+~/.local/src/notebash-plus-plus/bin/nbpp notes.txt</code></pre>
+    <button class="copy" type="button" hidden>Copy</button>
+  </div>
+</div>
+
+<!-- docs/video/: notebash-av1.mp4 (av1, played where the browser can),
+     notebash.mp4 (h.264 for the rest) and poster.png. the poster falls back
+     to hero.png, and the script at the end hides this block when the server
+     answers 404 for the mp4. -->
+<div class="video wide" id="video">
+  <video controls preload="none" playsinline poster="video/poster.png" width="1280" height="720">
+    <source src="video/notebash-av1.mp4" type='video/mp4; codecs="av01.0.08M.10, mp4a.40.2"'>
+    <source src="video/notebash.mp4" type="video/mp4">
+    <a href="video/notebash.mp4">Download the video (MP4)</a>
+  </video>
+</div>
+
+<figure class="shot hero-shot">
+  <img src="hero.png" width="1808" height="1694" fetchpriority="high"
+    alt="A Python file called retirement_plan.py open in Notebash++, with the Notepad++ menu bar, tabs, line numbers and status bar">
+</figure>
+
+<div class="text">
+  <p class="lead">I have 20 years of Notepad++ in my fingers. Then my work moved to Linux servers and WSL, and my fingers stayed behind. So this is Notepad++ 8.5.3's keyboard, copied one shortcut at a time from its source code, running inside Neovim.</p>
+  <p>Ctrl+S saves, Ctrl+H replaces, Shift+arrows select and typing replaces the selection. Nobody asks you to learn <code>ciw</code> at my age.</p>
+</div>
+
+<section id="spreadsheet" aria-labelledby="spreadsheet-title">
+  <div class="text">
+    <h2 id="spreadsheet-title">Spreadsheet view for CSV files</h2>
+    <p>A 5 GB CSV shows its first rows in 0.72 s and uses 121 MB of memory. The rows are counted in a background thread while you already scroll; the status bar says how far it got.</p>
+  </div>
+  <figure class="shot">
+    <img src="spreadsheet.png" width="2672" height="1014" loading="lazy" decoding="async"
+      alt="life_decisions.csv open as a spreadsheet: frozen header row, row numbers, right-aligned numbers, one cell selected">
+  </figure>
+  <div class="text">
+    <ul>
+      <li>Typing replaces a cell, in any keyboard layout. F2 or a double click edits it, Alt+Enter puts a line break inside it, Tab and Enter move on.</li>
+      <li>Ctrl+C and Ctrl+V move tab-separated blocks, so pasting to and from Excel or Google Sheets works. Ctrl+D duplicates rows, Ctrl+L deletes them, Ctrl+Shift+Up/Down moves them, Ctrl+Z undoes.</li>
+      <li>Ctrl+S rewrites only the rows you changed. Quoting, line endings and number formats everywhere else stay byte for byte as they were, so the diff is one line.</li>
+      <li>Ctrl+F searches the whole file without loading it, Ctrl+G goes to a row. Plugins &gt; Spreadsheet &gt; View as Text shows the raw text when you need it.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="large-files" aria-labelledby="large-files-title">
+  <div class="text">
+    <h2 id="large-files-title">Large files</h2>
+    <p>Text files over 32 MB open in a view that reads only the lines on screen. You can scroll, jump to any line (Ctrl+G), search the whole file (Ctrl+F, F3) and copy what you see. File &gt; Load Whole File for Editing loads files up to 1 GB the normal way when you really need to change one.</p>
+  </div>
+  <figure class="shot">
+    <img src="large-file.png" width="2128" height="1094" loading="lazy" decoding="async"
+      alt="excuses.log, 1.3 GB and 16 million lines, open at line 9,000,009 with a search hit highlighted">
+  </figure>
+</section>
+
+<section id="carets" aria-labelledby="carets-title">
+  <div class="text">
+    <h2 id="carets-title">Multiple carets</h2>
+    <p>Ctrl+click adds a caret. Ctrl+E selects the next match of the word or selection, Ctrl+Shift+E all of them (Notepad++ 8.6's Multi-select Next and All). Then typing, Backspace, Enter, Ctrl+V and the arrows act at every caret, and one Ctrl+Z takes it all back.</p>
+  </div>
+  <figure class="shot">
+    <img src="carets.png" width="1808" height="1014" loading="lazy" decoding="async"
+      alt="vows_to_my_air_fryer.txt with six carets, each replacing the word forever with until the warranty ends">
+  </figure>
+</section>
+
+<section id="notepad-plus-plus" aria-labelledby="npp-title">
+  <div class="text">
+    <h2 id="npp-title">Menus, keys and the Find dialog</h2>
+    <p>Every Notepad++ 8.5.3 default shortcut is there, from the File menu to the Scintilla editing keys. <a href="https://github.com/amosWeiskopf/notebash-plus-plus/blob/main/KEYS.md">KEYS.md</a> lists all of them, and Shift+F1 then any key tells you what that key does.</p>
+  </div>
+  <figure class="shot">
+    <img src="menus.png" width="2320" height="1454" loading="lazy" decoding="async"
+      alt="The Plugins menu open with its Spreadsheet submenu, in dark mode">
+  </figure>
+  <div class="text">
+    <ul>
+      <li><strong>Find, Replace, Find in Files and Mark</strong> in one dialog with Notepad++'s options. Notepad++ (Boost) regular expressions are translated, lookarounds and <code>$1</code> included. Find in Files uses ripgrep and stops at 10,000 hits.</li>
+      <li><strong>Column mode</strong> (Alt+Shift+arrows, Alt+drag) and the Column Editor.</li>
+      <li><strong>Macros, bookmarks, folding, Compare, word completion, smart highlighting</strong>, and the most installed plugins built in: Spell Check, JSON, XML Tools, HEX-Editor and Code Alignment.</li>
+      <li><strong>Web pages and files on your servers</strong>: <code>nbpp https://example.com/page.html</code> asks whether to edit the page as HTML or as Markdown, and <code>nbpp prod:/etc/nginx/nginx.conf</code> opens a file over SSH with your keys. Ctrl+S writes it back in place, through a temporary file on the server, so the file keeps its owner and permissions.</li>
+      <li><strong>Language servers with no setup</strong>: if <code>clangd</code>, <code>pyright</code>, <code>lua-language-server</code> or 11 others are on your path, they start for their files. F9 goes to the next problem, Ctrl+F12 to the definition. Servers that can run a project's own code, such as rust-analyzer with its build scripts, wait until you choose Plugins, Language Server, Trust This Folder, so opening a file from a download runs nothing.</li>
+      <li><strong>Session restore</strong>: unsaved documents, carets, scroll positions, folds and split windows come back after a restart or a crash.</li>
+      <li><strong>Messages never block typing.</strong> Errors show in a small box that fades; there is no "Press ENTER" prompt.</li>
+      <li><strong>Dark mode, word wrap, zoom</strong> (Ctrl+= and Ctrl+-), a word count in the status bar, and Ctrl and Alt keys that work with a Hebrew or Arabic layout.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="measured" aria-labelledby="measured-title">
+  <div class="text">
+    <h2 id="measured-title">Benchmarks</h2>
+    <p>Six tools opened the same 1 GB and 5 GB CSV files. Of the ones that can edit and save, Notebash++ is the only one that kept the 5 GB file under the 3.5 GB memory limit.</p>
+  </div>
+  <div class="wide charts">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="charts/first-rows-1gb-dark.png">
+      <img src="charts/first-rows-1gb.png" width="1543" height="789" loading="lazy" decoding="async"
+        alt="Bar chart: seconds until the first rows of a 1 GB CSV show. less 0.04, csvlens 0.28, Notebash++ 0.49, VisiData 0.75, Neovim 2.12, Vim 3.59">
+    </picture>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="charts/memory-5gb-dark.png">
+      <img src="charts/memory-5gb.png" width="1482" height="827" loading="lazy" decoding="async"
+        alt="Bar chart: peak memory with a 5 GB CSV open. less 2 MB, csvlens 6 MB, Notebash++ 121 MB; VisiData, Neovim and Vim stopped at the 3.5 GB limit">
+    </picture>
+  </div>
+  <div class="wide">
+    <div class="table-wrap">
+      <table>
+        <caption>Median of three runs, WSL2, Intel i9-13900H, November 2026</caption>
+        <thead>
+          <tr>
+            <th scope="col">Tool</th>
+            <th scope="col">Edits and saves</th>
+            <th scope="col" class="num">First rows, 1 GB</th>
+            <th scope="col" class="num">Last row, 1 GB</th>
+            <th scope="col" class="num">Memory, 1 GB</th>
+            <th scope="col" class="num">First rows, 5 GB</th>
+            <th scope="col" class="num">Memory, 5 GB</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="ours">
+            <th scope="row">Notebash++</th>
+            <td>yes</td>
+            <td class="num"><strong>0.49 s</strong></td>
+            <td class="num">7.8 s</td>
+            <td class="num"><strong>111 MB</strong></td>
+            <td class="num"><strong>0.72 s</strong></td>
+            <td class="num"><strong>121 MB</strong></td>
+          </tr>
+          <tr>
+            <th scope="row">Neovim 0.12</th>
+            <td>yes</td>
+            <td class="num">2.12 s</td>
+            <td class="num">0.01 s</td>
+            <td class="num">1,132 MB</td>
+            <td class="stopped" colspan="2">stopped at 3.5 GB</td>
+          </tr>
+          <tr>
+            <th scope="row">Vim 8.2</th>
+            <td>yes</td>
+            <td class="num">3.59 s</td>
+            <td class="num">0.03 s</td>
+            <td class="num">1,118 MB</td>
+            <td class="stopped" colspan="2">stopped at 3.5 GB</td>
+          </tr>
+          <tr>
+            <th scope="row">VisiData 3.5</th>
+            <td>yes</td>
+            <td class="num">0.75 s</td>
+            <td class="stopped" colspan="2">stopped at 3.5 GB</td>
+            <td class="num">1.02 s</td>
+            <td class="stopped">stopped at 3.5 GB</td>
+          </tr>
+          <tr>
+            <th scope="row">csvlens</th>
+            <td>no</td>
+            <td class="num">0.28 s</td>
+            <td class="num">2.2 s</td>
+            <td class="num">6 MB</td>
+            <td class="num">0.29 s</td>
+            <td class="num">6 MB</td>
+          </tr>
+          <tr>
+            <th scope="row">less</th>
+            <td>no</td>
+            <td class="num">0.04 s</td>
+            <td class="num">0.02 s</td>
+            <td class="num">2 MB</td>
+            <td class="num">0.04 s</td>
+            <td class="num">2 MB</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="text">
+    <p>less and csvlens only show files, and they show them faster than any of the editors. Ctrl+End in Notebash++ waits until every row is counted. With the file in the disk cache that runs at about 1 GB a second; from a cold disk it took 3 to 14 seconds for the 1 GB file here, and 36 seconds for the 5 GB one.</p>
+    <p>How it was measured: every tool ran in the same 120 by 30 tmux terminal on WSL2 (Intel i9-13900H, November 2026). The clock stops when the first data rows (or the file's last row) are on screen, and peak memory adds up all of the tool's processes. Each number is the median of three runs; a run over 3.5 GB of memory was stopped. Run it yourself with <code>tools/benchmark.py /tmp/benchmark</code>; it makes the test files, skips tools you do not have, and prints this table.</p>
+  </div>
+</section>
+
+<section id="compared" aria-labelledby="compared-title">
+  <div class="text">
+    <h2 id="compared-title">Next to other editors</h2>
+    <p>Notepad++ runs on Windows, and on Linux only under Wine. Notebash++ is its keyboard inside Neovim, which runs in a terminal, so it also works on a server you reach over SSH.</p>
+  </div>
+  <div class="wide">
+    <div class="table-wrap">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th scope="col"><span class="visually-hidden">Feature</span></th>
+            <th scope="col">Notebash++</th>
+            <th scope="col">Notepad++</th>
+            <th scope="col">Neovim or Vim</th>
+            <th scope="col">VS Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Linux, macOS, WSL, over SSH</th>
+            <td>yes</td>
+            <td>no (Windows, or Wine)</td>
+            <td>yes</td>
+            <td>yes, SSH through an extension</td>
+          </tr>
+          <tr>
+            <th scope="row">Runs in a terminal</th>
+            <td>yes</td>
+            <td>no</td>
+            <td>yes</td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <th scope="row">Notepad++ keys, menus, Find dialog</th>
+            <td>yes</td>
+            <td>yes</td>
+            <td>no</td>
+            <td>keys only, through an extension</td>
+          </tr>
+          <tr>
+            <th scope="row">No modes, Shift+arrows select</th>
+            <td>yes</td>
+            <td>yes</td>
+            <td>no</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <th scope="row">Plugins to choose from</th>
+            <td>the popular ones built in</td>
+            <td>hundreds</td>
+            <td>thousands</td>
+            <td>tens of thousands</td>
+          </tr>
+          <tr>
+            <th scope="row">Debugger</th>
+            <td>no</td>
+            <td>no</td>
+            <td>through plugins</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <th scope="row">A 5 GB CSV as a spreadsheet</th>
+            <td>yes, <a href="#measured">measured above</a></td>
+            <td>not measured</td>
+            <td>no</td>
+            <td>not measured</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="limits" aria-labelledby="limits-title">
+  <div class="text">
+    <h2 id="limits-title">Limits</h2>
+    <ul>
+      <li>It does not run Notepad++ plugins. The most installed ones are rebuilt inside it; for the rest, write Lua or ask.</li>
+      <li>A terminal never sends some keys (Ctrl+Shift+letter arrives as Ctrl+letter). The Neovide window gets all of them; see <a href="#terminals">Terminals and keys</a>.</li>
+      <li>Neovim has no bidirectional text, so Text Direction RTL mirrors the whole window.</li>
+      <li>The spreadsheet has no formulas, sorting or filtering, and I am not ready to support your accountant.</li>
+      <li>The large file view is read-only. Loading a file for editing stops at 1 GB.</li>
+      <li>With several carets, Up and Down move by file line, not by wrapped screen row.</li>
+      <li>Windows without WSL works as far as I know, which is not far, because the tests do not cover it yet.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="install" aria-labelledby="install-title">
+  <div class="text">
+    <h2 id="install-title">Install</h2>
+    <p>You need <a href="https://neovim.io">Neovim</a> 0.11 or newer. Optional: <a href="https://github.com/BurntSushi/ripgrep">ripgrep</a> for Find in Files, <a href="https://pandoc.org">pandoc</a> for web pages as Markdown, and <a href="https://neovide.dev">Neovide</a> for every key combination.</p>
+    <p>Notebash++ runs as its own Neovim configuration (<code>NVIM_APPNAME=notebashpp</code>). Your normal <code>nvim</code> and its config are not touched. I have enough to answer for without destroying the editor you already spent a year configuring.</p>
+
+    <h3>Linux, macOS, WSL</h3>
+    <div class="command">
+      <pre><code>git clone https://github.com/amosWeiskopf/notebash-plus-plus.git ~/.local/src/notebash-plus-plus
+mkdir -p ~/.local/bin
+ln -s ~/.local/src/notebash-plus-plus/bin/notebash++ ~/.local/bin/notebash++
+ln -s ~/.local/src/notebash-plus-plus/bin/nbpp ~/.local/bin/nbpp
+nbpp notes.txt</code></pre>
+      <button class="copy" type="button" hidden>Copy</button>
+    </div>
+    <p><code>nbpp</code> is the short name; <code>notebash++</code> works the same. If the shell says <code>nbpp: command not found</code>, <code>~/.local/bin</code> is not on your <code>PATH</code> (the default on macOS): add <code>export PATH="$HOME/.local/bin:$PATH"</code> to <code>~/.zshrc</code> or <code>~/.bashrc</code> and open a new terminal.</p>
+    <p>If <code>nvim</code> is missing or older than 0.11, the launcher offers to download the official Neovim release (pinned, now 0.12.6) from GitHub into <code>~/.local/share/notebashpp/neovim</code>, and checks its SHA-256 before unpacking. It asks only in a terminal, and the default is no. <code>notebash++ -installNeovim</code> installs it without asking. A system <code>nvim</code> that is new enough always wins. This works on Linux (x86_64 and arm64, glibc) and macOS.</p>
+    <p>The first start links <code>~/.config/notebashpp</code> to the clone. If one instance is already running, a second <code>notebash++ file</code> opens the file in that instance, as Notepad++ does. Notepad++'s command-line options work: <code>-multiInst</code>, <code>-nosession</code>, <code>-n&lt;line&gt;</code>, <code>-c&lt;column&gt;</code>. <code>notebash++ -gui</code> starts it in Neovide.</p>
+
+    <h3>Windows with WSL</h3>
+    <p>After the steps above, <code>notebash++ -install</code> puts Neovide in <code>%LOCALAPPDATA%\Programs\Notebash++</code> and adds Notebash++ to the Start menu and the desktop. The window runs Neovim inside WSL; the clipboard goes through the bundled <code>win32yank.exe</code>, which keeps UTF-8 (Hebrew, Arabic, emoji) intact.</p>
+
+    <h3>Windows without WSL</h3>
+    <p>Clone into <code>%LOCALAPPDATA%\notebashpp</code> and run <code>bin\nbpp.cmd</code> (or <code>bin\notebash++.cmd</code>, the same thing). If Neovim is missing or too old, it offers <code>winget install --id Neovim.Neovim -e</code>, or prints the download link when there is no winget. I wrote this path, but the tests do not cover it yet. Please report how it goes.</p>
+
+    <h3 id="terminals">Terminals and keys</h3>
+    <p>A terminal cannot send every key Notepad++ uses. Ctrl+Shift+letter arrives as Ctrl+letter, Ctrl+I as Tab, Ctrl+M as Enter, and terminals and tmux keep some combinations for themselves. You press a key and several programs argue over whether you meant it. Neovide passes everything through, so use it if you want the whole keyboard.</p>
+    <p>Windows Terminal takes Ctrl+Shift+Home/End/PgUp/PgDn for scrolling, Ctrl+Shift+F, Ctrl+Tab, Alt+Enter and F11; unbind the ones you want in its <code>settings.json</code>. tmux keeps its prefix key (Ctrl+B by default, Go to Matching Brace in Notepad++).</p>
+
+    <h3>More</h3>
+    <p>Every shortcut and its command id is in <a href="https://github.com/amosWeiskopf/notebash-plus-plus/blob/main/KEYS.md">KEYS.md</a>. Settings, the differences from Notepad++ and how to work on the code are in the <a href="https://github.com/amosWeiskopf/notebash-plus-plus#readme">README</a>. Bugs go to the <a href="https://github.com/amosWeiskopf/notebash-plus-plus/issues">issue tracker</a>.</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wide">
+    <p>Notebash++ 1.0.0 by Amos Weiskopf, <a href="https://github.com/amosWeiskopf/notebash-plus-plus/blob/main/LICENSE">MIT license</a>. Source on <a href="https://github.com/amosWeiskopf/notebash-plus-plus">GitHub</a>.</p>
+    <p>Not affiliated with the Notepad++ project; Notepad++ is a trademark of Don Ho.</p>
+  </div>
+</footer>
+
+<script>
+// copy buttons: shown only when the clipboard api exists
+for (const button of document.querySelectorAll('.copy')) {
+  if (!navigator.clipboard) continue;
+  button.hidden = false;
+  button.addEventListener('click', async () => {
+    const text = button.parentElement.querySelector('code').textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      button.textContent = 'Copied';
+    } catch {
+      button.textContent = 'Select and copy';
+    }
+    setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+  });
+}
+
+// video: poster falls back to the hero screenshot; a missing mp4 hides the block
+const video = document.querySelector('#video video');
+if (video) {
+  const poster = new Image();
+  poster.onerror = () => { video.poster = 'hero.png'; };
+  poster.src = video.getAttribute('poster');
+  if (location.protocol.startsWith('http')) {
+    fetch(video.querySelector('source').src, { method: 'HEAD' })
+      .then((response) => { if (!response.ok) document.getElementById('video').hidden = true; })
+      .catch(() => {});
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,533 @@
+#!/usr/bin/env bash
+# the notebash++ launcher. everybody starts here. i wanted to write fiction,
+# and now i'm explaining command-line flags. basically the same failure.
+#
+# notebash++ [files...]       open files in the running notebash++ if there
+# is one, else start notebash++ in this terminal notebash++ -gui [files...]
+# start notebash++ in its own window (neovide) notebash++ -install
+# wsl only: put notebash++ in the windows start menu and on the desktop
+#
+# notepad++ command-line options that work here too: -multiinst   a separate
+# instance (without the session) -nosession   do not restore or save the
+# session -n<line>     go to line,  -c<column>  go to column
+#
+# notebash++ -installneovim  download a private neovim into the data folder
+# when nvim is missing or older than 0.11 (linux and macos). setting
+# notebashpp_install_neovim=1 does the same without asking on any launch.
+#
+# neovide starts this script with --embed (see -install below). we set things
+# up, then become nvim --embed, talking to neovide over stdin and stdout. i
+# wanted to be useful. apparently that means becoming somebody else and
+# keeping my own mouth shut. super transferable life skills.
+
+set -u
+
+# an empty path gets the system folders, so readlink and dirname exist below.
+# even i get a minimum to work with.
+export PATH="${PATH:-/usr/local/bin:/usr/bin:/bin}"
+PROJECT_ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+# some ci runners and service managers start programs without home. take it
+# from the password database then, or /tmp when even that says nothing.
+if [ -z "${HOME:-}" ]; then
+    HOME="$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6)"
+    export HOME="${HOME:-/tmp}"
+fi
+# neovide through wsl.exe can leave path nearly empty. absolutely helpful.
+# append the usual places after the user's entries, so their own nvim wins. if
+# you went to the trouble of installing your own problems, i want you to keep
+# them. i have enough of mine. the tests can keep path exactly as given, so a
+# system nvim in /usr/bin cannot hide the missing neovim case.
+if [ "${NOTEBASHPP_TEST:-}" != 1 ] || [ "${NOTEBASHPP_TEST_EXACT_PATH:-}" != 1 ]; then
+    # an empty path plus ":..." would start with an empty entry, which means
+    # the current folder, and ./nvim would win. whatever's lying around in a
+    # folder shouldn't get to run things. that rule came too late for me.
+    export PATH="${PATH:+$PATH:}$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+fi
+export NVIM_APPNAME=notebashpp
+
+# nvim_appname makes neovim look in ~/.config/notebashpp. symlink that back
+# to this repository once, then leave it alone. apparently a permanent
+# commitment is possible if neither party has feelings.
+CONFIG_LINK="${XDG_CONFIG_HOME:-$HOME/.config}/notebashpp"
+if [ ! -e "$CONFIG_LINK" ]; then
+    mkdir -p "$(dirname "$CONFIG_LINK")"
+    # -n: if another launch just made the link, fail quietly. otherwise we'd
+    # follow it and put a link inside the repository. i ruin enough things
+    # alone.
+    ln -sn "$PROJECT_ROOT" "$CONFIG_LINK" 2>/dev/null || true
+fi
+
+# the socket lets the next launch send files to the running instance. anyone
+# who connects can make neovim do anything as you. basically your whole life,
+# handed to a damn editor. i wanted to open a file. my mistake. use a folder
+# only you can enter, inside xdg_runtime_dir, or your own state folder when
+# there is none (macos). never use shared /tmp: another user could replace the
+# folder with a link between our checks. apparently even my security checks
+# need security checks. refuse links and folders owned by somebody else. on
+# macos, the socket's own permissions don't protect it; the folder's
+# permissions do. please keep this one boundary intact.
+SOCKET_DIRECTORY="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}"
+mkdir -p "$SOCKET_DIRECTORY"
+SOCKET_DIRECTORY="${SOCKET_DIRECTORY%/}/notebashpp-$(id -u)"
+if ! mkdir -m 700 "$SOCKET_DIRECTORY" 2>/dev/null; then
+    if [ -L "$SOCKET_DIRECTORY" ] || [ ! -d "$SOCKET_DIRECTORY" ] || [ ! -O "$SOCKET_DIRECTORY" ] || ! chmod 700 "$SOCKET_DIRECTORY"; then
+        echo "Notebash++: $SOCKET_DIRECTORY is not a folder owned by you; remove it and try again." >&2
+        exit 1
+    fi
+fi
+SERVER_SOCKET="$SOCKET_DIRECTORY/server.sock"
+RUNNING_IN_WSL=0
+if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then
+    RUNNING_IN_WSL=1
+fi
+WSL_DISTRO="${WSL_DISTRO_NAME:-Ubuntu}"
+
+# get the windows user name to find neovide in the profile where -install put
+# it. ask cmd.exe from /mnt/c. i need another operating system to tell me who
+# i am. therapy was expensive, but this is absolutely worse.
+windows_user_name() {
+    if [ -n "${NOTEBASHPP_WINUSER:-}" ]; then
+        echo "$NOTEBASHPP_WINUSER"
+    else
+        (cd /mnt/c 2>/dev/null && cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')
+    fi
+}
+
+# with_time_limit seconds command... stock macos has no timeout(1), so we
+# just wait there. i wanted a time limit; apparently only my life gets one.
+with_time_limit() {
+    local seconds=$1
+    shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$seconds" "$@"
+    else
+        "$@"
+    fi
+}
+
+embed_requested=0 gui_requested=0 separate_instance=0 no_session=0 install_requested=0 install_neovim_requested=0 goto_line="" goto_column=""
+files=()
+only_files_follow=0
+is_number() { [[ "$1" =~ ^[0-9]+$ ]]; }
+# get the full file path for an instance started in another folder. the --
+# keeps a file named --help from becoming a readlink option. i want help too.
+# apparently being named after it is enough.
+absolute_path_of() {
+    if is_remote_name "$1"; then
+        printf '%s\n' "$1"
+        return
+    fi
+    readlink -f -- "$1" 2>/dev/null || case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *) printf '%s\n' "$PWD/$1" ;;
+    esac
+}
+for argument in "$@"; do
+    # after --, every argument is a file name, even "-n5" or "+call system()".
+    # a file can have a stupid name. giving it authority as well is basically
+    # how i got into this shit.
+    if [ "$only_files_follow" = 1 ]; then
+        files+=("$argument")
+        continue
+    fi
+    case "$argument" in
+        --) only_files_follow=1 ;;
+        --embed) embed_requested=1 ;;
+        -gui) gui_requested=1 ;;
+        -install) install_requested=1 ;;
+        -installNeovim) install_neovim_requested=1 ;;
+        -multiInst) separate_instance=1 ;;
+        -nosession) no_session=1 ;;
+        # digits only. these enter a vim command line. "-n1|call
+        # system('...')" starts with a digit too. basically a pulse is no
+        # proof of decency.
+        -n[0-9]*) is_number "${argument#-n}" && goto_line="${argument#-n}" ;;
+        -c[0-9]*) is_number "${argument#-c}" && goto_column="${argument#-c}" ;;
+        # accept these notepad++ options and do absolutely nothing with them.
+        # basically my retirement plan, with better documentation.
+        -ro | -notabbar | -nosplash | -systemtray | -alwaysOnTop | -noPlugin | -openSession | -r | -quickPrint) ;;
+        -l* | -L* | -x* | -y* | -p*) ;;
+        *)
+            # windows paths (c:\..., \\wsl.localhost\...) become linux paths.
+            # same hell.
+            if [[ "$argument" =~ ^[A-Za-z]:[\\/] || "$argument" =~ ^\\\\ ]]; then
+                argument="$(wslpath -u "$argument" 2>/dev/null || echo "$argument")"
+            fi
+            files+=("$argument")
+            ;;
+    esac
+done
+
+# web addresses and ssh files open as remote documents (see
+# lua/notebashpp/remote_documents.lua). http://, https://, ssh:// and
+# scp:// pass through untouched; scp's own host:/path or user@host:~/path
+# becomes ssh://... when no local file has that name. the host needs two or
+# more characters, so c:/ stays a drive. long-distance relationships are the
+# only kind i manage.
+is_remote_name() {
+    case "$1" in
+        http://* | https://* | HTTP://* | HTTPS://* | ssh://* | scp://*) return 0 ;;
+    esac
+    return 1
+}
+for index in "${!files[@]}"; do
+    file="${files[$index]}"
+    if ! is_remote_name "$file" && [ ! -e "$file" ] && [[ "$file" != -* ]] && [[ "$file" =~ ^([A-Za-z0-9._-]+@)?([A-Za-z0-9._-]{2,}):([/~].*)$ ]]; then
+        remote_path="${BASH_REMATCH[3]}"
+        [ "${remote_path:0:1}" = "~" ] && remote_path="/$remote_path"
+        files[index]="ssh://${BASH_REMATCH[1]}${BASH_REMATCH[2]}$remote_path"
+    fi
+done
+
+# nvim_appname needs neovim 0.9; notebash++ needs 0.11. older nvim can
+# quietly start as plain neovim, leaving you pressing ctrl+s into the void. i
+# want a clear refusal. i've wasted enough life mistaking silence for
+# something working.
+#
+# when nvim is missing or too old, the launcher can download the official
+# neovim release into the data folder and use that copy. a system nvim that
+# is new enough always wins over the private copy.
+PINNED_NEOVIM_TAG="v0.12.6"
+NEOVIM_INSTALL_GUIDE="https://github.com/neovim/neovim/blob/master/INSTALL.md"
+NEOVIM_DOWNLOAD_SIZE_LIMIT=$((100 * 1024 * 1024))
+PRIVATE_NEOVIM_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/notebashpp/neovim"
+INSTALL_WORK_DIRECTORY=""
+
+# github's sha-256 for each release tarball of the pinned tag. a download
+# that does not match is thrown away.
+pinned_neovim_sha256() {
+    case "$1" in
+        nvim-linux-x86_64.tar.gz) echo 474430d53e6264f6d6dd18db42d6dc9df3a1b56ca9e88a325bbf860e1a811d87 ;;
+        nvim-linux-arm64.tar.gz) echo 8f1f64a0bdb97247034038c3823c6cbad5bdf9ecd5751b85494b71c3ee04c815 ;;
+        nvim-macos-x86_64.tar.gz) echo 481424f1dbc85f637d57e47d27d042aa9c883e5a4fe9ee64fc4ee9573b221998 ;;
+        nvim-macos-arm64.tar.gz) echo 1dbd148222b051ba6c307c4d17a318ed083df018a4f6a5a0ce46955ffc9ab87b ;;
+        *) return 1 ;;
+    esac
+}
+
+# prints the release folder name for this system, for example
+# nvim-linux-x86_64, or fails when neovim publishes no tarball for it. the
+# linux tarballs need 64-bit glibc, so musl and 32-bit systems are out.
+neovim_release_name() {
+    local machine
+    case "$(uname -m)" in
+        x86_64 | amd64) machine=x86_64 ;;
+        aarch64 | arm64) machine=arm64 ;;
+        *) return 1 ;;
+    esac
+    case "$(uname -s)" in
+        Linux)
+            getconf GNU_LIBC_VERSION >/dev/null 2>&1 || return 1
+            [ "$(getconf LONG_BIT 2>/dev/null)" = 64 ] || return 1
+            echo "nvim-linux-$machine"
+            ;;
+        Darwin) echo "nvim-macos-$machine" ;;
+        *) return 1 ;;
+    esac
+}
+
+# prints the first line of nvim --version, for example "nvim v0.12.6".
+neovim_version_line() {
+    with_time_limit 10 "$1" --version 2>/dev/null | head -1
+}
+
+neovim_is_new_enough() {
+    local version major minor
+    version="$(neovim_version_line "$1" | sed -n 's/^NVIM v\([0-9]*\)\.\([0-9]*\).*/\1 \2/p')"
+    [ -n "$version" ] || return 1
+    read -r major minor <<<"$version"
+    [ "$major" -gt 0 ] || [ "$minor" -ge 11 ]
+}
+
+# prints the nvim of a private copy that runs and is new enough. the pinned
+# release comes first, then any other release folder an older launcher left.
+private_neovim_program() {
+    local release_name candidate
+    release_name="$(neovim_release_name)" || return 1
+    for candidate in "$PRIVATE_NEOVIM_ROOT/$release_name-$PINNED_NEOVIM_TAG/bin/nvim" "$PRIVATE_NEOVIM_ROOT"/nvim-*/bin/nvim; do
+        if [ -x "$candidate" ] && neovim_is_new_enough "$candidate"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# the data folder as people write it, with ~ for the home folder.
+private_neovim_root_for_display() {
+    case "$PRIVATE_NEOVIM_ROOT" in
+        "$HOME"/*) printf '%s%s\n' '~' "${PRIVATE_NEOVIM_ROOT#"$HOME"}" ;;
+        *) printf '%s\n' "$PRIVATE_NEOVIM_ROOT" ;;
+    esac
+}
+
+sha256_of_file() {
+    local digest
+    if command -v sha256sum >/dev/null 2>&1; then
+        digest="$(sha256sum -- "$1")" || return 1
+    elif command -v shasum >/dev/null 2>&1; then
+        digest="$(shasum -a 256 -- "$1")" || return 1
+    else
+        return 1
+    fi
+    printf '%s\n' "${digest%% *}"
+}
+
+# download_with_limits url output_file allowed_protocols. https only (the
+# tests also allow file), at most 10 minutes and neovim_download_size_limit
+# bytes. curl first, wget when there is no curl. the file is never run, only
+# checked and unpacked.
+download_with_limits() {
+    local url=$1 output_file=$2 allowed_protocols=$3 download_status=0 downloaded_bytes
+    if command -v curl >/dev/null 2>&1; then
+        curl --proto "$allowed_protocols" --proto-redir '=https' --tlsv1.2 --fail --location --silent --show-error \
+            --connect-timeout 30 --max-time 600 --max-filesize "$NEOVIM_DOWNLOAD_SIZE_LIMIT" \
+            --output "$output_file" -- "$url" || download_status=$?
+    elif command -v wget >/dev/null 2>&1; then
+        # wget has no size limit, so head cuts the stream one byte past it.
+        (
+            set -o pipefail
+            with_time_limit 600 wget --https-only --secure-protocol=TLSv1_2 --timeout=30 --tries=2 --max-redirect=5 \
+                --quiet --output-document=- -- "$url" | head -c "$((NEOVIM_DOWNLOAD_SIZE_LIMIT + 1))" >"$output_file"
+        ) || download_status=$?
+    else
+        echo "Notebash++ needs curl or wget to download Neovim." >&2
+        return 1
+    fi
+    downloaded_bytes="$(wc -c <"$output_file" 2>/dev/null || echo 0)"
+    if [ "$downloaded_bytes" -gt "$NEOVIM_DOWNLOAD_SIZE_LIMIT" ]; then
+        echo "The Neovim download is larger than $((NEOVIM_DOWNLOAD_SIZE_LIMIT / 1024 / 1024)) MB; nothing was installed." >&2
+        return 1
+    fi
+    if [ "$download_status" != 0 ]; then
+        echo "The Neovim download failed; nothing was installed." >&2
+        return 1
+    fi
+}
+
+# removes the download folder, and the neovim folder too when it is empty.
+# runs on success, on failure and on ctrl+c.
+remove_install_work_directory() {
+    if [ -n "$INSTALL_WORK_DIRECTORY" ]; then
+        rm -rf -- "$INSTALL_WORK_DIRECTORY"
+        INSTALL_WORK_DIRECTORY=""
+    fi
+    rmdir -- "$PRIVATE_NEOVIM_ROOT" 2>/dev/null || true
+}
+
+# downloads the pinned release into a private temporary folder inside the
+# neovim folder, checks its sha-256, unpacks it, checks that its nvim runs,
+# then renames it into place as nvim-<system>-<tag>. a rename on one file
+# system is atomic, so a launch never sees a half unpacked copy. the tests
+# point the download at a local fake with notebashpp_neovim_download_base
+# and notebashpp_neovim_sha256, honoured only with notebashpp_test=1.
+install_private_neovim() {
+    local release_name expected_sha256 actual_sha256 download_base allowed_protocols archive unpacked target
+    release_name="$(neovim_release_name)" || return 1
+    expected_sha256="$(pinned_neovim_sha256 "$release_name.tar.gz")" || return 1
+    download_base="https://github.com/neovim/neovim/releases/download/$PINNED_NEOVIM_TAG"
+    allowed_protocols='=https'
+    if [ "${NOTEBASHPP_TEST:-}" = 1 ]; then
+        if [ -n "${NOTEBASHPP_NEOVIM_DOWNLOAD_BASE:-}" ]; then
+            download_base="$NOTEBASHPP_NEOVIM_DOWNLOAD_BASE"
+            allowed_protocols='=https,file'
+        fi
+        expected_sha256="${NOTEBASHPP_NEOVIM_SHA256:-$expected_sha256}"
+    fi
+    target="$PRIVATE_NEOVIM_ROOT/$release_name-$PINNED_NEOVIM_TAG"
+
+    mkdir -p -- "$PRIVATE_NEOVIM_ROOT" || return 1
+    trap 'remove_install_work_directory; exit 130' INT TERM HUP
+    trap remove_install_work_directory EXIT
+    INSTALL_WORK_DIRECTORY="$(mktemp -d -- "$PRIVATE_NEOVIM_ROOT/.download-XXXXXX")" || {
+        remove_install_work_directory
+        return 1
+    }
+    archive="$INSTALL_WORK_DIRECTORY/$release_name.tar.gz"
+    unpacked="$INSTALL_WORK_DIRECTORY/unpacked"
+
+    echo "Downloading Neovim ${PINNED_NEOVIM_TAG#v} ($release_name.tar.gz)..." >&2
+    if ! download_with_limits "$download_base/$release_name.tar.gz" "$archive" "$allowed_protocols"; then
+        remove_install_work_directory
+        return 1
+    fi
+    actual_sha256="$(sha256_of_file "$archive")" || actual_sha256=""
+    if [ -z "$actual_sha256" ] || [ "$actual_sha256" != "$expected_sha256" ]; then
+        echo "The Neovim download does not match its pinned SHA-256 checksum; nothing was installed." >&2
+        remove_install_work_directory
+        return 1
+    fi
+    if ! mkdir -- "$unpacked" || ! tar -xzf "$archive" -C "$unpacked"; then
+        echo "Could not unpack the Neovim download; nothing was installed." >&2
+        remove_install_work_directory
+        return 1
+    fi
+    if ! neovim_is_new_enough "$unpacked/$release_name/bin/nvim"; then
+        echo "The downloaded Neovim does not run on this system (the Linux build needs a recent glibc); nothing was installed." >&2
+        echo "Install Neovim 0.11 or newer another way: $NEOVIM_INSTALL_GUIDE" >&2
+        remove_install_work_directory
+        return 1
+    fi
+    # another launch may have finished the same install a moment ago. keep
+    # its copy; renaming onto an existing folder would nest ours inside it.
+    if [ ! -e "$target" ]; then
+        mv -- "$unpacked/$release_name" "$target" || {
+            remove_install_work_directory
+            return 1
+        }
+    fi
+    remove_install_work_directory
+    trap - INT TERM HUP EXIT
+    echo "Installed Neovim ${PINNED_NEOVIM_TAG#v} in $target" >&2
+}
+
+# asks on the terminal. no terminal, no question: the answer is no.
+user_agrees_to_install_neovim() {
+    local answer
+    [ -t 0 ] && [ -t 2 ] || return 1
+    printf 'Notebash++ needs Neovim 0.11 or newer. Download Neovim %s from github.com/neovim/neovim into %s? [y/N] ' \
+        "${PINNED_NEOVIM_TAG#v}" "$(private_neovim_root_for_display)" >&2
+    read -r answer || return 1
+    case "$answer" in
+        [yY] | [yY][eE][sS]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+explain_missing_neovim() {
+    if [ -n "$system_neovim" ]; then
+        echo "Notebash++ needs Neovim 0.11 or newer; $system_neovim is $(neovim_version_line "$system_neovim")." >&2
+    else
+        echo "Notebash++ needs Neovim 0.11 or newer, and there is no nvim on PATH." >&2
+    fi
+    if neovim_release_name >/dev/null; then
+        echo "Run notebash++ -installNeovim to download Neovim ${PINNED_NEOVIM_TAG#v} into $(private_neovim_root_for_display)," >&2
+        echo "or install it yourself: $NEOVIM_INSTALL_GUIDE" >&2
+    else
+        echo "Neovim publishes no download for this system ($(uname -s) $(uname -m)$([ "$(uname -s)" = Linux ] && echo ', 64-bit glibc needed'))." >&2
+        echo "Install Neovim 0.11 or newer yourself: $NEOVIM_INSTALL_GUIDE" >&2
+    fi
+}
+
+NEOVIM_PROGRAM=""
+system_neovim="$(command -v nvim 2>/dev/null)"
+if [ -n "$system_neovim" ] && neovim_is_new_enough "$system_neovim"; then
+    NEOVIM_PROGRAM="$system_neovim"
+elif private_neovim="$(private_neovim_program)"; then
+    NEOVIM_PROGRAM="$private_neovim"
+fi
+
+if [ "$install_neovim_requested" = 1 ]; then
+    if [ -n "$NEOVIM_PROGRAM" ]; then
+        echo "Notebash++ already uses $NEOVIM_PROGRAM ($(neovim_version_line "$NEOVIM_PROGRAM")); nothing to install."
+        exit 0
+    fi
+    if ! neovim_release_name >/dev/null; then
+        explain_missing_neovim
+        exit 1
+    fi
+    install_private_neovim || exit 1
+    exit 0
+fi
+
+if [ -z "$NEOVIM_PROGRAM" ]; then
+    if neovim_release_name >/dev/null && { [ "${NOTEBASHPP_INSTALL_NEOVIM:-}" = 1 ] || user_agrees_to_install_neovim; }; then
+        install_private_neovim || exit 1
+        NEOVIM_PROGRAM="$(private_neovim_program)" || exit 1
+    else
+        explain_missing_neovim
+        exit 1
+    fi
+fi
+
+# check for a live socket answering within 2 s (with timeout). even my
+# computer gets screened now.
+running_instance_answers() {
+    [ -S "$SERVER_SOCKET" ] && with_time_limit 2 "$NEOVIM_PROGRAM" --server "$SERVER_SOCKET" --remote-expr 1 >/dev/null 2>&1
+}
+
+# after opening, go to line & column like notepad++'s -n and -c. shit has
+# coordinates now.
+after_open_commands=()
+if [ -n "$goto_line" ]; then
+    after_open_commands+=("+call cursor($goto_line, ${goto_column:-1})")
+fi
+
+if [ "$install_requested" = 1 ]; then
+    exec "$PROJECT_ROOT/windows/install.sh"
+fi
+
+# -gui outside wsl: hand everything to the local neovide. let it suffer.
+# --neovim-bin gives it the same nvim we found, private copy included.
+if [ "$gui_requested" = 1 ] && [ "$RUNNING_IN_WSL" = 0 ]; then
+    if ! command -v neovide >/dev/null 2>&1; then
+        echo "Neovide is not installed: https://neovide.dev" >&2
+        exit 1
+    fi
+    [ "$no_session" = 1 ] || [ "$separate_instance" = 1 ] && export NOTEBASHPP_NO_SESSION=1
+    exec neovide --neovim-bin "$NEOVIM_PROGRAM" -- "${after_open_commands[@]+"${after_open_commands[@]}"}" -- "${files[@]+"${files[@]}"}"
+fi
+
+# -gui inside wsl: start windows neovide; it reruns this script through
+# wsl.exe with --embed. wsl.exe gets --exec, never a bare --: after -- it
+# hands the rest to bash -c, so a file named r$(id).txt would run id. i don't
+# need my file names getting ideas. forward the flags and make every file path absolute,
+# because the other side starts elsewhere and knows nothing of our cwd. i'd
+# love this much distance from my own decisions. unfortunately they keep
+# finding me (apparently they use absolute paths too).
+if [ "$gui_requested" = 1 ]; then
+    WINDOWS_NEOVIDE_EXE="/mnt/c/Users/$(windows_user_name)/AppData/Local/Programs/Notebash++/neovide.exe"
+    if [ ! -x "$WINDOWS_NEOVIDE_EXE" ]; then
+        echo "Neovide is not installed; run: notebash++ -install" >&2
+        exit 1
+    fi
+    forwarded_arguments=()
+    [ "$separate_instance" = 1 ] && forwarded_arguments+=(-multiInst)
+    [ "$no_session" = 1 ] && forwarded_arguments+=(-nosession)
+    [ -n "$goto_line" ] && forwarded_arguments+=("-n$goto_line")
+    [ -n "$goto_column" ] && forwarded_arguments+=("-c$goto_column")
+    # every path is made absolute below, so it starts with / and can't pass
+    # for an option. no -- here: neovide adds --embed after our arguments,
+    # and behind a -- it would count as a file name.
+    for file in "${files[@]+"${files[@]}"}"; do
+        forwarded_arguments+=("$(absolute_path_of "$file")")
+    done
+    cd /mnt/c || exit 1
+    "$WINDOWS_NEOVIDE_EXE" --neovim-bin wsl.exe -- -d "$WSL_DISTRO" --exec "$PROJECT_ROOT/bin/notebash++" "${forwarded_arguments[@]+"${forwarded_arguments[@]}"}" >/dev/null 2>&1 &
+    disown
+    exit 0
+fi
+
+# one notebash++ at a time, like notepad++. send files to the running one
+# over the socket, then exit quietly. i wrote my own replacement and gave it
+# my work. finally, a career plan with absolutely no loose ends.
+if [ "$embed_requested" = 0 ] && [ "$separate_instance" = 0 ] && running_instance_answers; then
+    for file in "${files[@]+"${files[@]}"}"; do
+        absolute_path="$(absolute_path_of "$file")"
+        # the editor opens it once this call has returned, so a question it
+        # asks (html or markdown?) waits for you, not for this script. line
+        # and column are digits only, checked when the options were read.
+        "$NEOVIM_PROGRAM" --server "$SERVER_SOCKET" --remote-expr "luaeval('require(\"notebashpp.file_commands\").open_from_launcher(_A[1], _A[2], _A[3])', ['${absolute_path//\'/\'\'}', '$goto_line', '$goto_column'])" >/dev/null 2>&1
+    done
+    echo "Opened in the running Notebash++."
+    exit 0
+fi
+
+nvim_arguments=()
+if [ "$separate_instance" = 1 ] || running_instance_answers; then
+    # a second instance must not overwrite the first one's session. one of us
+    # should still remember what the hell we were doing.
+    export NOTEBASHPP_NO_SESSION=1
+else
+    # first instance: remove the dead crash socket, then listen there. cheaper
+    # than moving after a death.
+    rm -f "$SERVER_SOCKET"
+    nvim_arguments+=(--listen "$SERVER_SOCKET")
+fi
+[ "$no_session" = 1 ] && export NOTEBASHPP_NO_SESSION=1
+[ "$embed_requested" = 1 ] && nvim_arguments+=(--embed)
+
+# the -- tells neovim only file names follow. "+lua os.exit()" and "--cmd"
+# open as files instead of running. i want to read my failures, please,
+# without granting them executive powers.
+exec "$NEOVIM_PROGRAM" "${nvim_arguments[@]}" "${after_open_commands[@]+"${after_open_commands[@]}"}" -- "${files[@]+"${files[@]}"}"

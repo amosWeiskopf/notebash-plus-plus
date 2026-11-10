@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: If you use Notebash++ in your work, please cite it as below.
+title: "Notebash++: Neovim with the Notepad++ keyboard"
+abstract: >-
+  A Neovim configuration that makes Neovim type and edit like Notepad++ 8.5.3:
+  modeless editing, Windows-style selection, the full Notepad++ key table,
+  its menus, Find and Replace dialog with Notepad++ regular expressions,
+  column mode, macros, bookmarks, document compare and session restore.
+type: software
+authors:
+  - family-names: Weiskopf
+    given-names: Amos
+repository-code: "https://github.com/amosWeiskopf/notebash-plus-plus"
+license: MIT
+version: 1.0.0
+date-released: "2026-11-16"
+keywords:
+  - neovim
+  - notepad++
+  - text editor
+  - keybindings
+  - lua
